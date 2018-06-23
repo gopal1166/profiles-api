@@ -4,9 +4,20 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import HttpResponse
 from . import serializers
-from .serializers import TestSerializer
+from .serializers import TestSerializer, UserProfileSerializer, ProfileFeedSerializer
+from .models import UserProfile, ProfileFeed
+from . import models
+
+
+from rest_framework.authentication import TokenAuthentication
+from .permissions import UpdateOwnProfile, UpdateOwnProfileFeed
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework import filters
 
 from rest_framework import viewsets
+
+from rest_framework.authtoken.serializers import AuthTokenSerializer
+from rest_framework.authtoken.views import ObtainAuthToken
 
 # Create your views here.
 class TestApiView(APIView):
@@ -59,7 +70,7 @@ class TestViewSet(viewsets.ViewSet):
         """Creates an object """
 
         serializer = TestSerializer(data=request.data)
-        
+
         if serializer.is_valid():
             name = serializer.data.get('name')
             message = 'Bello {0}'.format(name)
@@ -86,3 +97,43 @@ class TestViewSet(viewsets.ViewSet):
         """Deletes an object based on id"""
 
         return Response({'status': 'success', 'http_method': 'delete'})
+
+
+class UserProfileViewSet(viewsets.ModelViewSet):
+    """Handles CRUD operations on user profiles """
+
+    serializer_class = UserProfileSerializer
+    queryset = UserProfile.objects.all()
+
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (UpdateOwnProfile, IsAuthenticatedOrReadOnly)
+
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ('name', 'email')
+
+
+class LoginViewSet(viewsets.ViewSet):
+    """Checks email n password and returns auth Token """
+
+    serializer_class = AuthTokenSerializer
+
+    def create(self, request):
+        """Use ObtainAuthToken APIView to validate and returns a Token """
+
+        return ObtainAuthToken().post(request)
+
+
+class ProfileFeedViewSet(viewsets.ModelViewSet):
+    """Handles creating, reading and updating profile feed items."""
+
+
+    serializer_class = ProfileFeedSerializer
+    authentication_classes = (TokenAuthentication,)
+    queryset = ProfileFeed.objects.all()
+
+    permission_classes = (UpdateOwnProfileFeed, IsAuthenticatedOrReadOnly)
+
+    def perform_create(self, serializer):
+        """Sets the user profile to the logged in user."""
+
+        serializer.save(user_profile=self.request.user)
